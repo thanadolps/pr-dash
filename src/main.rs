@@ -1,5 +1,6 @@
-use color_eyre::{eyre::WrapErr, Result};
-use octocrab::{params::State, OctocrabBuilder};
+use color_eyre::{eyre::WrapErr, Result, Section};
+use dialoguer::Select;
+use octocrab::{params::State, Octocrab, OctocrabBuilder};
 use serde::Deserialize;
 use sqlx::SqlitePool;
 
@@ -16,8 +17,24 @@ async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
     color_eyre::install()?;
 
-    let env = envy::from_env::<Env>()?;
+    let env = envy::from_env::<Env>().wrap_err("failed parse envar")?;
+    let db = SqlitePool::connect(&env.database_url).await?;
+    let oc = OctocrabBuilder::new().personal_token(env.token).build()?;
 
+    match Select::new()
+        .items(&["update", "summary"])
+        .default(0)
+        .interact()?
+    {
+        0 => update_pull_requests(&db, &oc).await?,
+        1 => todo!(),
+        _ => unreachable!(),
+    }
+
+    Ok(())
+}
+
+async fn update_pull_requests(db: &SqlitePool, oc: &Octocrab) -> Result<()> {
     let org = "smartertravel";
     let repos = [
         "datasource-converter",
@@ -26,9 +43,6 @@ async fn main() -> Result<()> {
         "partner-feed",
     ];
 
-    let db = SqlitePool::connect(&env.database_url).await?;
-
-    let oc = OctocrabBuilder::new().personal_token(env.token).build()?;
     for &repo in repos.iter() {
         let pull = oc.pulls(org, repo);
 
@@ -62,7 +76,7 @@ async fn main() -> Result<()> {
                         }) {
                         Ok(id) => id,
                         Err(e) => {
-                            println!("skipping {}/{}: {:?}", repo, pr.number, e);
+                            println!("skipping {}/{}: {:?}", repo, pr.number, e.note(repo));
                             continue;
                         }
                     };
@@ -102,5 +116,11 @@ async fn main() -> Result<()> {
             }
         }
     }
+
     Ok(())
 }
+
+// TODO: check if filter paging work correctly
+
+// iterator of pages required that cover all the provied id
+struct PageSeeker {}
