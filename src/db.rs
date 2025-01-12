@@ -1,3 +1,4 @@
+use bon::builder;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use color_eyre::{eyre::Ok, Result};
 use octocrab::models::{pulls::PullRequest, pulls::Review};
@@ -20,7 +21,7 @@ pub async fn get_updated_at(
 
     let rows = sqlx::query_as!(
         Result,
-        "SELECT id, updated_at FROM pull_request WHERE repo = ?",
+        "SELECT id, updated_at FROM pull_request WHERE repo = $1",
         repo
     )
     .fetch_all(db)
@@ -50,7 +51,7 @@ pub async fn upsert_pull_request(
     let result = sqlx::query!(
         r#"
         INSERT OR REPLACE INTO pull_request (id, repo, author, state, head, base, title, body, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         "#,
         id,
         repo,
@@ -85,7 +86,7 @@ pub async fn upsert_review(
     sqlx::query!(
         r#"
         INSERT OR REPLACE INTO review (id, pr_repo, pr_id, author, state, submitted_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6)
         "#,
         id,
         pr_id.repo,
@@ -98,4 +99,76 @@ pub async fn upsert_review(
     .await?;
 
     Ok(())
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct SummaryClosePr {
+    pub repo: String,
+    pub author: String,
+    pub count: u32,
+}
+
+#[builder]
+pub async fn summary_closed_pr(
+    #[builder(start_fn)] db: &SqlitePool,
+    author: Option<String>,
+    repo: Option<String>,
+    base: Option<String>,
+) -> Result<Vec<SummaryClosePr>> {
+    let result = sqlx::query_as!(
+        SummaryClosePr,
+        r#"
+        SELECT repo, author, count(*) as "count!: u32"
+        FROM pull_request
+        WHERE state = 'Closed'
+            AND ($1 IS NULL OR author = $1)
+            AND ($2 IS NULL OR repo = $2)
+            AND ($3 IS NULL OR base = $3)
+        GROUP BY repo, author
+        ORDER BY repo, count(*) DESC
+        "#,
+        author,
+        repo,
+        base
+    )
+    .fetch_all(db)
+    .await?;
+
+    Ok(result)
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct SummaryApprovePr {
+    pub repo: String,
+    pub approver: String,
+    pub count: u32,
+}
+
+#[builder]
+pub async fn summary_approved_pr(
+    #[builder(start_fn)] db: &SqlitePool,
+    author: Option<String>,
+    repo: Option<String>,
+    base: Option<String>,
+) -> Result<Vec<SummaryApprovePr>> {
+    let result = sqlx::query_as!(
+        SummaryApprovePr,
+        r#"
+        SELECT pr_repo as "repo", author as "approver", count(distinct concat(pr_repo, pr_id)) as "count!: u32"
+        FROM review
+        WHERE state = 'Approved'
+            AND ($1 IS NULL OR author = $1)
+            AND ($2 IS NULL OR repo = $2)
+            AND ($3 IS NULL OR pr_repo = $3)
+        GROUP BY pr_repo, author
+        ORDER BY pr_repo, count(*) DESC
+        "#,
+        author,
+        repo,
+        base
+    )
+    .fetch_all(db)
+    .await?;
+
+    Ok(result)
 }

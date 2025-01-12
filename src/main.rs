@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
         .interact()?
     {
         0 => update_pull_requests(&db, &oc).await?,
-        1 => todo!(),
+        1 => summary(&db).await?,
         _ => unreachable!(),
     }
 
@@ -135,6 +135,26 @@ async fn update_pull_requests(db: &SqlitePool, oc: &Octocrab) -> Result<()> {
             tx.commit().await?;
         }
     }
+
+    Ok(())
+}
+
+async fn summary(db: &SqlitePool) -> Result<()> {
+    let summary = db::summary_closed_pr(db).call().await?;
+    let mut table = comfy_table::Table::new();
+    table.set_header(["repo", "author", "count"]);
+    for s in summary {
+        table.add_row([s.repo, s.author, s.count.to_string()]);
+    }
+    println!("Closed PR\n{table}");
+
+    let summary = db::summary_approved_pr(db).call().await?;
+    let mut table = comfy_table::Table::new();
+    table.set_header(["repo", "approver", "count"]);
+    for s in summary {
+        table.add_row([s.repo, s.approver, s.count.to_string()]);
+    }
+    println!("Approved PR\n{table}");
 
     Ok(())
 }
