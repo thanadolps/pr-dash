@@ -48,7 +48,7 @@ pub async fn upsert_pull_request(
     let created_at = pr.created_at;
     let updated_at = pr.updated_at;
 
-    let result = sqlx::query!(
+    sqlx::query!(
         r#"
         INSERT OR REPLACE INTO pull_request (id, repo, author, state, head, base, title, body, created_at, updated_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)

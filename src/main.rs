@@ -103,7 +103,7 @@ async fn update_pull_requests(db: &SqlitePool, oc: &Octocrab) -> Result<()> {
 
             let mut tx = db.begin().await?;
 
-            let pr_id = match db::upsert_pull_request(&mut *tx, repo, &pr)
+            let pr_id = match db::upsert_pull_request(&mut *tx, repo, pr)
                 .await
                 .wrap_err_with(|| format!("failed to upsert pull request {}/{}", repo, pr.number))
             {
