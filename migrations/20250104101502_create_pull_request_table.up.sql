@@ -8,5 +8,7 @@ CREATE TABLE IF NOT EXISTS pull_request (
     base TEXT NOT NULL,
     title TEXT NOT NULL,
     body TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
     PRIMARY KEY (repo, id)
 )
