@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT OR REPLACE INTO review (id, pr_repo, pr_id, author, state, submitted_at)\n        VALUES ($1, $2, $3, $4, $5, $6)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "1bc7cc808df9ca72b3676c3fd9c5e065e466010865853b953e9f13f522b3728f"
+}

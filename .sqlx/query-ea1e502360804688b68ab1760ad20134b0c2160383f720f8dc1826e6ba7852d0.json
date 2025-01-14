@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT pr_repo as \"repo\", author as \"approver\", count(distinct concat(pr_repo, pr_id)) as \"count!: u32\"\n        FROM review\n        WHERE state = 'Approved'\n            AND ($1 IS NULL OR author = $1)\n            AND ($2 IS NULL OR repo = $2)\n            AND ($3 IS NULL OR pr_repo = $3)\n        GROUP BY pr_repo, author\n        ORDER BY pr_repo, count(*) DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "repo",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "approver",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "count!: u32",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ea1e502360804688b68ab1760ad20134b0c2160383f720f8dc1826e6ba7852d0"
+}

@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT repo, author, count(*) as \"count!: u32\"\n        FROM pull_request\n        WHERE state = 'Closed'\n            AND ($1 IS NULL OR author = $1)\n            AND ($2 IS NULL OR repo = $2)\n            AND ($3 IS NULL OR base = $3)\n        GROUP BY repo, author\n        ORDER BY repo, count(*) DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "repo",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "author",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "count!: u32",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "28d2b4f8820c72dc702f4859a05675ffa603290bbf0bd424b04b2e30043f42b3"
+}

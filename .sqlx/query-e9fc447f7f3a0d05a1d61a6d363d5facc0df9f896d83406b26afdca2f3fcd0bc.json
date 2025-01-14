@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT OR REPLACE INTO pull_request (id, repo, author, state, head, base, title, body, created_at, updated_at)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "e9fc447f7f3a0d05a1d61a6d363d5facc0df9f896d83406b26afdca2f3fcd0bc"
+}
