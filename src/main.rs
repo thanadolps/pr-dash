@@ -11,6 +11,8 @@ use serde::Deserialize;
 use sqlx::SqlitePool;
 
 mod db;
+#[cfg(test)]
+mod tests;
 
 #[derive(Deserialize)]
 struct Env {
