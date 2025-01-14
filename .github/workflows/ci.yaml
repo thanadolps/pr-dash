@@ -17,8 +17,9 @@ jobs:
       - name: Collect coverage data
         run: cargo llvm-cov nextest --codecov --output-path codecov.json
       - name: Upload coverage data to codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          # token: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: thanadolps/pr-dash
           files: codecov.json
           fail_ci_if_error: true
