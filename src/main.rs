@@ -2,7 +2,11 @@ use std::collections::BTreeMap;
 
 use color_eyre::{eyre::WrapErr, Result, Section};
 use dialoguer::Select;
-use octocrab::{params::State, Octocrab, OctocrabBuilder};
+use octocrab::{
+    models::pulls::PullRequest,
+    params::{pulls::Sort, Direction, State},
+    Octocrab, OctocrabBuilder,
+};
 use serde::Deserialize;
 use sqlx::SqlitePool;
 
@@ -48,13 +52,21 @@ async fn update_pull_requests(db: &SqlitePool, oc: &Octocrab) -> Result<()> {
     for &repo in repos.iter() {
         let pull = oc.pulls(org, repo);
 
-        // get all PRs
+        // get info on cached PR
+        let cached_updated_at = db::get_updated_at(db, repo)
+            .await?
+            .into_iter()
+            .collect::<BTreeMap<_, _>>();
+
+        // fetch the PRs
         let mut prs = Vec::new();
         for i in 0u32.. {
             let page = pull
                 .list()
                 .state(State::All)
                 .per_page(100)
+                .sort(Sort::Updated)
+                .direction(Direction::Descending)
                 .page(i)
                 .send()
                 .await?;
@@ -64,20 +76,35 @@ async fn update_pull_requests(db: &SqlitePool, oc: &Octocrab) -> Result<()> {
                 repo,
                 page.items.len()
             );
+            prs.extend_from_slice(&page.items);
 
-            if page.items.is_empty() {
-                break;
+            // stopping condition
+            match (page.items.last(), cached_updated_at.values().max()) {
+                // no more PRs
+                (None, _) => {
+                    println!("stop fetching, no more PRs");
+                    break;
+                }
+                // still more PRs but cached PRs will always be up-to-date or newer from this point
+                // (only work because PRs are sorted by updated_at desc)
+                (Some(PullRequest { updated_at, .. }), Some(cached))
+                    if *cached >= updated_at.unwrap() =>
+                {
+                    println!(
+                        "stop fetching, cached PRs are up to date ({} >= {})",
+                        cached,
+                        updated_at.unwrap()
+                    );
+                    break;
+                }
+                // still more PRs
+                _ => {}
             }
-            prs.extend(page.items);
         }
         println!("Collected {} PRs", prs.len());
 
-        // determine PR that need to be updated
-        let cached_updated_at = db::get_updated_at(db, repo)
-            .await?
-            .into_iter()
-            .collect::<BTreeMap<_, _>>();
-        let need_update = prs
+        // determine PR that need to be further updated
+        let mut need_update = prs
             .iter()
             .filter(|pr| {
                 cached_updated_at
@@ -85,6 +112,9 @@ async fn update_pull_requests(db: &SqlitePool, oc: &Octocrab) -> Result<()> {
                     .map_or(true, |updated_at| updated_at < &pr.updated_at.unwrap())
             })
             .collect::<Vec<_>>();
+        // sort by updated_at in ascending order - older PRs come first.
+        // if the process gets interrupted, a rerun will continue from where we left off since we process PRs from oldest to newest
+        need_update.sort_by_key(|pr| pr.updated_at);
         println!("{} PRs need to be updated", need_update.len());
 
         for pr in need_update {
@@ -103,23 +133,25 @@ async fn update_pull_requests(db: &SqlitePool, oc: &Octocrab) -> Result<()> {
 
             let mut tx = db.begin().await?;
 
-            let pr_id = match db::upsert_pull_request(&mut *tx, repo, pr)
+            let pr_id = db::upsert_pull_request(&mut *tx, repo, pr)
                 .await
-                .wrap_err_with(|| format!("failed to upsert pull request {}/{}", repo, pr.number))
-            {
-                Ok(id) => id,
-                Err(e) => {
-                    println!("skipping {}/{}: {:?}", repo, pr.number, e.note(repo));
-                    continue;
-                }
-            };
+                .wrap_err_with(|| {
+                    format!("failed to upsert pull request {}/{}", repo, pr.number)
+                })?;
             assert_eq!(pr.number as i64, pr_id.number);
 
             for review in reviews.items {
-                if let Err(e) = db::upsert_review(&mut *tx, &pr_id, &review).await {
-                    println!("failed to insert review: {}", e);
-                    continue;
-                }
+                db::upsert_review(&mut *tx, &pr_id, &review)
+                    .await
+                    .wrap_err_with(|| {
+                        format!(
+                            "failed to upsert review {}/{}/{} ({})",
+                            repo,
+                            pr.number,
+                            review.id,
+                            review.body_text.unwrap_or_default()
+                        )
+                    })?;
                 println!(
                     "\t{:?} by {:?} at {:?}",
                     review.state,
