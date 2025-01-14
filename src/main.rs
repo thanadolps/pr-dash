@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use color_eyre::{eyre::WrapErr, Result, Section};
+use color_eyre::{eyre::WrapErr, Result};
 use dialoguer::Select;
 use octocrab::{
     models::pulls::PullRequest,
