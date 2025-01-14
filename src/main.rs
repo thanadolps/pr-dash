@@ -16,6 +16,8 @@ mod db;
 struct Env {
     token: String,
     database_url: String,
+    org: String,
+    repos: Vec<String>,
 }
 
 #[tokio::main]
@@ -25,14 +27,15 @@ async fn main() -> Result<()> {
 
     let env = envy::from_env::<Env>().wrap_err("failed parse envar")?;
     let db = SqlitePool::connect(&env.database_url).await?;
-    let oc = OctocrabBuilder::new().personal_token(env.token).build()?;
+    let token = env.token.clone();
+    let oc = OctocrabBuilder::new().personal_token(token).build()?;
 
     match Select::new()
         .items(&["update", "summary"])
         .default(0)
         .interact()?
     {
-        0 => update_pull_requests(&db, &oc).await?,
+        0 => update_pull_requests(&db, &oc, &env).await?,
         1 => summary(&db).await?,
         _ => unreachable!(),
     }
@@ -40,17 +43,9 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn update_pull_requests(db: &SqlitePool, oc: &Octocrab) -> Result<()> {
-    let org = "smartertravel";
-    let repos = [
-        "datasource-converter",
-        "data-platform",
-        "smarter-mail",
-        "partner-feed",
-    ];
-
-    for &repo in repos.iter() {
-        let pull = oc.pulls(org, repo);
+async fn update_pull_requests(db: &SqlitePool, oc: &Octocrab, env: &Env) -> Result<()> {
+    for repo in env.repos.iter() {
+        let pull = oc.pulls(&env.org, repo);
 
         // get info on cached PR
         let cached_updated_at = db::get_updated_at(db, repo)
